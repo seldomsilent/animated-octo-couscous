@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// User Management
+// ============================================================================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  companyName       String?
+  
+  // QuickBooks Online Integration
+  qboConnected      Boolean   @default(false)
+  qboCompanyId      String?
+  qboAccessToken    String?   // Encrypted
+  qboRefreshToken   String?   // Encrypted
+  qboTokenExpiresAt DateTime?
+  
+  // User preferences (JSON)
+  preferences       Json      @default("{}")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+  
+  // Relations
+  receipts          Receipt[]
+  transactions      Transaction[]
+  vendorMappings    VendorMapping[]
+  classificationRules ClassificationRule[]
+  
+  @@index([email])
+}
+
+// ============================================================================
+// Receipt Processing
+// ============================================================================
+
+enum ReceiptStatus {
+  PENDING      // Just uploaded, awaiting classification
+  CLASSIFIED   // User has classified, ready to post
+  POSTED       // Successfully posted to QuickBooks
+  UNCERTAIN    // User skipped or marked as uncertain
+  PERSONAL     // Marked as personal expense (not business)
+}
+
+model Receipt {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // File information
+  fileUrl     String
+  fileType    String        // jpg, png, pdf, etc.
+  fileName    String?
+  fileSize    Int?          // bytes
+  
+  // OCR extracted data
+  ocrText     String?       // Raw extracted text
+  ocrData     Json?         // Structured data from OCR (vendor, date, amounts, etc.)
+  
+  // Processing status
+  status      ReceiptStatus @default(PENDING)
+  
+  // Timestamps
+  uploadedAt  DateTime      @default(now())
+  processedAt DateTime?
+  
+  // Relations
+  transaction Transaction?
+  
+  @@index([userId])
+  @@index([status])
+  @@index([uploadedAt])
+}
+
+// ============================================================================
+// Transactions
+// ============================================================================
+
+model Transaction {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Link to receipt
+  receiptId       String?   @unique
+  receipt         Receipt?  @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  
+  // Transaction details
+  vendorName      String
+  date            DateTime
+  amount          Decimal   @db.Decimal(10, 2)
+  description     String?   // What the user said about this expense
+  
+  // Classification
+  accountCategory String    // e.g., "Vehicle Expenses: Fuel"
+  taxCode         String    // e.g., "GST 5%", "GST/PST 12%", "Exempt"
+  
+  // QuickBooks sync
+  qboTransactionId String?  // ID after posting to QBO
+  
+  // AI confidence and user confirmation
+  aiConfidenceScore Float?  // 0.0 to 1.0
+  userConfirmed     Boolean @default(false)
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  postedAt        DateTime?
+  
+  @@index([userId])
+  @@index([vendorName])
+  @@index([date])
+  @@index([accountCategory])
+}
+
+// ============================================================================
+// Vendor Recognition & Learning
+// ============================================================================
+
+model VendorMapping {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Pattern matching
+  vendorPattern   String   // e.g., "ESSO", "Esso Cardlock", "LORDCO"
+  
+  // Default classification for this vendor
+  defaultCategory String
+  defaultTaxCode  String
+  
+  // Learning data
+  timesUsed       Int      @default(1)
+  lastUsedAt      DateTime @default(now())
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([userId, vendorPattern])
+  @@index([userId])
+  @@index([vendorPattern])
+}
+
+// ============================================================================
+// Classification Rules
+// ============================================================================
+
+model ClassificationRule {
+  id              String   @id @default(cuid())
+  
+  // null userId = global rule, set userId = user-specific rule
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Pattern matching
+  keywordPattern  String   // e.g., "fuel", "gas", "diesel"
+  
+  // Classification output
+  category        String
+  taxCode         String
+  
+  // Priority for rule ordering (higher = checked first)
+  priority        Int      @default(0)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([priority])
+}
