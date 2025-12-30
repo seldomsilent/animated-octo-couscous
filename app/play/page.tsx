@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { ArrowLeft, Mic, MicOff, SkipForward, HelpCircle, User } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { ArrowLeft, Mic, SkipForward, HelpCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { SlotMachine } from "@/components/slot-machine";
+import { useVoiceInput } from "@/hooks/use-voice-input";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 // Mock receipt data - will be replaced with real data
 const mockReceipts = [
@@ -58,8 +61,7 @@ const MONEY_SAVED_PER_RECEIPT = (2.75 / 60) * 80; // ~$3.67
 export default function PlayPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [streak, setStreak] = useState(7);
-  const [isListening, setIsListening] = useState(false);
-  const [transcription, setTranscription] = useState("");
+  const [inputValue, setInputValue] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [showSlotMachine, setShowSlotMachine] = useState(false);
   const [classificationResult, setClassificationResult] = useState<{
@@ -68,9 +70,33 @@ export default function PlayPage() {
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Voice input hook
+  const {
+    isListening,
+    isSupported: voiceSupported,
+    transcript,
+    toggleListening,
+    resetTranscript,
+  } = useVoiceInput({
+    onResult: (text) => {
+      setInputValue(text);
+      // Auto-submit after voice input
+      setTimeout(() => {
+        handleSubmit(text);
+      }, 500);
+    },
+  });
+
+  // Update input value from transcript while listening
+  useEffect(() => {
+    if (transcript) {
+      setInputValue(transcript);
+    }
+  }, [transcript]);
+
   const totalReceipts = mockReceipts.length;
   const currentReceipt = mockReceipts[currentIndex];
-  const progress = ((currentIndex + 1) / totalReceipts) * 100;
+  const progress = ((currentIndex) / totalReceipts) * 100;
 
   // Check if we're done
   if (currentIndex >= totalReceipts) {
@@ -95,7 +121,8 @@ export default function PlayPage() {
     setTimeout(() => {
       setShowSlotMachine(false);
       setClassificationResult(null);
-      setTranscription("");
+      setInputValue("");
+      resetTranscript();
       setCurrentIndex((prev) => prev + 1);
       setStreak((prev) => prev + 1);
     }, 1500);
@@ -104,42 +131,37 @@ export default function PlayPage() {
   const handleSkip = () => {
     setCurrentIndex((prev) => prev + 1);
     setStreak(0); // Reset streak on skip
-    setTranscription("");
+    setInputValue("");
+    resetTranscript();
   };
 
   const handleUncertain = () => {
-    // Mark as uncertain and move on
     setCurrentIndex((prev) => prev + 1);
     setStreak(0);
-    setTranscription("");
+    setInputValue("");
+    resetTranscript();
   };
 
   const handlePersonal = () => {
-    // Mark as personal and move on
     setCurrentIndex((prev) => prev + 1);
-    // Keep streak for personal items
-    setTranscription("");
+    setInputValue("");
+    resetTranscript();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleSubmit(transcription);
+      handleSubmit(inputValue);
     }
-  };
-
-  const toggleListening = () => {
-    setIsListening(!isListening);
-    // TODO: Implement actual speech recognition
   };
 
   // Get AI prompt based on confidence
   const getPrompt = () => {
     if (currentReceipt.confidence >= 0.85 && currentReceipt.suggestedCategory) {
-      return `${currentReceipt.vendor} — looks like ${currentReceipt.suggestedCategory}, ${currentReceipt.suggestedTaxCode}. Confirm?`;
+      return `Looks like ${currentReceipt.suggestedCategory}, ${currentReceipt.suggestedTaxCode}. Confirm?`;
     } else if (currentReceipt.confidence >= 0.6 && currentReceipt.suggestedCategory) {
-      return `${currentReceipt.vendor} — is this ${currentReceipt.suggestedCategory}?`;
+      return `Is this ${currentReceipt.suggestedCategory}?`;
     } else {
-      return `What was this $${currentReceipt.amount.toFixed(2)} at ${currentReceipt.vendor} for?`;
+      return `What was this for?`;
     }
   };
 
@@ -153,152 +175,191 @@ export default function PlayPage() {
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm">Back</span>
+            <span className="text-sm">Exit</span>
           </Link>
 
-          <div className="text-sm font-medium">
+          <div className="text-sm font-medium tabular-nums">
             {currentIndex + 1} of {totalReceipts}
           </div>
 
           <div className="flex items-center gap-1 text-sm">
             <span className="text-lg">🔥</span>
-            <span className="font-medium">{streak} streak</span>
+            <span className="font-medium tabular-nums">{streak}</span>
           </div>
         </div>
       </header>
 
       {/* Progress Bar */}
       <div className="bg-card border-b border-border">
-        <div className="max-w-5xl mx-auto px-4">
-          <Progress value={progress} className="h-2" />
-        </div>
-        <div className="max-w-5xl mx-auto px-4 py-1 text-right">
-          <span className="text-xs text-muted-foreground">{Math.round(progress)}%</span>
-        </div>
+        <Progress value={progress} className="h-1 rounded-none" />
       </div>
 
       {/* Main Content */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8">
-        <div className="grid md:grid-cols-2 gap-8 items-start">
-          {/* Receipt Image */}
-          <Card className="overflow-hidden">
-            <div className="aspect-[3/4] bg-muted flex items-center justify-center">
-              {/* Placeholder for receipt image */}
-              <div className="text-center text-muted-foreground">
-                <div className="w-16 h-20 border-2 border-dashed border-muted-foreground/30 rounded mb-2 mx-auto" />
-                <p className="text-sm">Receipt Image</p>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentReceipt.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="grid md:grid-cols-2 gap-8 items-start"
+          >
+            {/* Receipt Image */}
+            <Card className="overflow-hidden">
+              <div className="aspect-[3/4] bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+                <div className="text-center text-muted-foreground">
+                  <div className="w-20 h-24 border-2 border-dashed border-muted-foreground/30 rounded-lg mb-3 mx-auto flex items-center justify-center">
+                    <span className="text-3xl">🧾</span>
+                  </div>
+                  <p className="text-sm font-medium">{currentReceipt.vendor}</p>
+                  <p className="text-xs text-muted-foreground">{currentReceipt.date}</p>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
 
-          {/* Classification Panel */}
-          <div className="space-y-6">
-            {/* Receipt Info */}
-            <div>
-              <h1 className="text-2xl font-bold text-foreground mb-1">
-                {currentReceipt.vendor}
-              </h1>
-              <p className="text-3xl font-bold text-foreground tabular-nums">
-                ${currentReceipt.amount.toFixed(2)}
-              </p>
-              <p className="text-muted-foreground">{currentReceipt.date}</p>
-            </div>
+            {/* Classification Panel */}
+            <div className="space-y-6">
+              {/* Receipt Info */}
+              <div>
+                <h1 className="text-2xl font-bold text-foreground mb-1">
+                  {currentReceipt.vendor}
+                </h1>
+                <p className="text-4xl font-bold text-foreground tabular-nums">
+                  ${currentReceipt.amount.toFixed(2)}
+                </p>
+                <p className="text-muted-foreground mt-1">{currentReceipt.date}</p>
+              </div>
 
-            <div className="border-t border-border pt-6">
-              {/* AI Prompt */}
-              <p className="text-foreground mb-4">{getPrompt()}</p>
+              <div className="border-t border-border pt-6">
+                {/* AI Prompt */}
+                <p className="text-lg text-foreground mb-4">{getPrompt()}</p>
 
-              {/* Input Area */}
-              {!showSlotMachine && (
-                <div className="flex gap-2 mb-6">
-                  <div className="relative flex-1">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={transcription}
-                      onChange={(e) => setTranscription(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder={
-                        currentReceipt.confidence >= 0.85
-                          ? 'Say "yes" to confirm...'
-                          : "Describe this expense..."
-                      }
-                      className="w-full px-4 py-3 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                    {isListening && (
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-primary animate-pulse">
-                        Listening...
-                      </span>
+                {/* Input Area */}
+                {!showSlotMachine && (
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={
+                            currentReceipt.confidence >= 0.85
+                              ? 'Say "yes" to confirm...'
+                              : "Describe this expense..."
+                          }
+                          className="w-full px-4 py-3 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring text-lg"
+                        />
+                        {isListening && (
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                            <span className="flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                            </span>
+                            <span className="text-sm text-primary">Listening...</span>
+                          </span>
+                        )}
+                      </div>
+                      {voiceSupported && (
+                        <Button
+                          size="lg"
+                          variant={isListening ? "default" : "outline"}
+                          onClick={toggleListening}
+                          className={cn(
+                            "px-4 transition-all",
+                            isListening && "bg-primary animate-pulse"
+                          )}
+                        >
+                          <Mic className="w-5 h-5" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Quick Submit for high confidence */}
+                    {currentReceipt.confidence >= 0.85 && (
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleSubmit("yes")}
+                          className="flex-1 h-12 text-base"
+                        >
+                          ✓ Yes, confirm
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => inputRef.current?.focus()}
+                          className="flex-1 h-12 text-base"
+                        >
+                          ✎ No, let me specify
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Submit button for low confidence */}
+                    {currentReceipt.confidence < 0.85 && inputValue && (
+                      <Button
+                        onClick={() => handleSubmit(inputValue)}
+                        className="w-full h-12 text-base"
+                      >
+                        Classify
+                      </Button>
                     )}
                   </div>
-                  <Button
-                    size="lg"
-                    variant={isListening ? "default" : "outline"}
-                    onClick={toggleListening}
-                    className={`px-4 ${isListening ? "bg-primary" : ""}`}
-                  >
-                    {isListening ? (
-                      <Mic className="w-5 h-5" />
-                    ) : (
-                      <MicOff className="w-5 h-5" />
-                    )}
-                  </Button>
-                </div>
-              )}
+                )}
 
-              {/* Slot Machine */}
-              {showSlotMachine && classificationResult && (
-                <div className="py-6">
-                  <SlotMachine
-                    category={classificationResult.category}
-                    taxCode={classificationResult.taxCode}
-                    moneySaved={MONEY_SAVED_PER_RECEIPT}
-                    isSpinning={isSpinning}
-                    onComplete={handleSlotComplete}
-                  />
-                </div>
-              )}
+                {/* Slot Machine */}
+                <AnimatePresence>
+                  {showSlotMachine && classificationResult && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className="py-8"
+                    >
+                      <SlotMachine
+                        category={classificationResult.category}
+                        taxCode={classificationResult.taxCode}
+                        moneySaved={MONEY_SAVED_PER_RECEIPT}
+                        isSpinning={isSpinning}
+                        onComplete={handleSlotComplete}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-              {/* Quick Submit for high confidence */}
-              {!showSlotMachine && currentReceipt.confidence >= 0.85 && (
-                <div className="flex gap-2 mb-6">
-                  <Button
-                    onClick={() => handleSubmit("yes")}
-                    className="flex-1 bg-primary hover:bg-primary/90"
-                  >
-                    Yes, confirm
+              {/* Action Buttons */}
+              {!showSlotMachine && (
+                <div className="flex gap-2 pt-4 border-t border-border">
+                  <Button variant="outline" size="sm" onClick={handleSkip} className="gap-2">
+                    <SkipForward className="w-4 h-4" />
+                    Skip
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => inputRef.current?.focus()}
-                    className="flex-1"
-                  >
-                    No, let me specify
+                  <Button variant="outline" size="sm" onClick={handleUncertain} className="gap-2">
+                    <HelpCircle className="w-4 h-4" />
+                    Uncertain
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handlePersonal} className="gap-2">
+                    <User className="w-4 h-4" />
+                    Personal
                   </Button>
                 </div>
               )}
             </div>
-
-            {/* Action Buttons */}
-            {!showSlotMachine && (
-              <div className="flex gap-2 pt-4 border-t border-border">
-                <Button variant="outline" size="sm" onClick={handleSkip}>
-                  <SkipForward className="w-4 h-4 mr-2" />
-                  Skip
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleUncertain}>
-                  <HelpCircle className="w-4 h-4 mr-2" />
-                  Uncertain
-                </Button>
-                <Button variant="outline" size="sm" onClick={handlePersonal}>
-                  <User className="w-4 h-4 mr-2" />
-                  Personal
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+          </motion.div>
+        </AnimatePresence>
       </main>
+
+      {/* Keyboard shortcuts hint */}
+      <footer className="border-t border-border bg-card px-4 py-2">
+        <div className="max-w-5xl mx-auto flex justify-center gap-6 text-xs text-muted-foreground">
+          <span><kbd className="px-1.5 py-0.5 bg-muted rounded">Enter</kbd> Submit</span>
+          <span><kbd className="px-1.5 py-0.5 bg-muted rounded">Y</kbd> Yes</span>
+          <span><kbd className="px-1.5 py-0.5 bg-muted rounded">S</kbd> Skip</span>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -312,7 +373,7 @@ function classifyInput(
 
   // If user confirms suggestion
   if (
-    (lowerInput === "yes" || lowerInput === "confirm" || lowerInput === "yep") &&
+    (lowerInput === "yes" || lowerInput === "confirm" || lowerInput === "yep" || lowerInput === "yeah") &&
     receipt.suggestedCategory
   ) {
     return {
@@ -322,13 +383,13 @@ function classifyInput(
   }
 
   // Simple keyword matching
-  if (lowerInput.includes("fuel") || lowerInput.includes("gas")) {
+  if (lowerInput.includes("fuel") || lowerInput.includes("gas") || lowerInput.includes("diesel")) {
     return { category: "Fuel & Oil", taxCode: "GST 5%" };
   }
   if (lowerInput.includes("parts") || lowerInput.includes("supplies")) {
     return { category: "Parts & Supplies", taxCode: "GST+PST 12%" };
   }
-  if (lowerInput.includes("lunch") || lowerInput.includes("meal") || lowerInput.includes("food")) {
+  if (lowerInput.includes("lunch") || lowerInput.includes("meal") || lowerInput.includes("food") || lowerInput.includes("coffee")) {
     return { category: "Meals & Ent.", taxCode: "GST 2.5%" };
   }
   if (lowerInput.includes("office")) {
@@ -340,12 +401,15 @@ function classifyInput(
   if (lowerInput.includes("insurance")) {
     return { category: "Insurance", taxCode: "Exempt" };
   }
-  if (lowerInput.includes("repair")) {
-    return { category: "Repairs", taxCode: "GST+PST 12%" };
+  if (lowerInput.includes("repair") || lowerInput.includes("maintenance")) {
+    return { category: "Repairs & Maint.", taxCode: "GST+PST 12%" };
+  }
+  if (lowerInput.includes("tool")) {
+    return { category: "Tools", taxCode: "GST+PST 12%" };
   }
 
   // Default fallback
-  return { category: "General", taxCode: "GST+PST 12%" };
+  return { category: "General Expense", taxCode: "GST+PST 12%" };
 }
 
 // Completion Screen
@@ -361,44 +425,73 @@ function CompletionScreen({
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <Card className="max-w-lg w-full">
-        <CardContent className="p-8 text-center">
-          <div className="text-5xl mb-4">🎉</div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">All caught up!</h1>
-          <p className="text-muted-foreground mb-8">Great work on this session</p>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Card className="max-w-lg w-full">
+          <CardContent className="p-8 text-center">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className="text-6xl mb-4"
+            >
+              🎉
+            </motion.div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">
+              All caught up!
+            </h1>
+            <p className="text-muted-foreground mb-8">
+              You crushed it! Here&apos;s your session summary.
+            </p>
 
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="p-4 bg-muted rounded-lg">
-              <div className="text-2xl font-bold text-foreground">{totalProcessed}</div>
-              <div className="text-sm text-muted-foreground">receipts processed</div>
-            </div>
-            <div className="p-4 bg-muted rounded-lg">
-              <div className="text-2xl font-bold text-foreground">
-                ${moneySaved.toFixed(0)}
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="text-3xl font-bold text-foreground tabular-nums">
+                  {totalProcessed}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  receipts processed
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">saved</div>
+              <div className="p-4 bg-primary/10 rounded-lg">
+                <div className="text-3xl font-bold text-primary tabular-nums">
+                  ${moneySaved.toFixed(0)}
+                </div>
+                <div className="text-sm text-muted-foreground">saved</div>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-center gap-2 mb-8 text-muted-foreground">
-            <span className="text-lg">🔥</span>
-            <span>
-              Streak: <span className="font-medium text-foreground">{streak}</span>
-            </span>
-          </div>
+            <div className="flex items-center justify-center gap-4 mb-8 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🔥</span>
+                <span className="font-medium text-foreground">{streak} streak</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">⏱️</span>
+                <span className="font-medium text-foreground">
+                  {timeSavedMinutes.toFixed(0)} min saved
+                </span>
+              </div>
+            </div>
 
-          <div className="space-y-3">
-            <Button size="lg" className="w-full bg-primary hover:bg-primary/90">
-              Sync to QuickBooks
-            </Button>
-            <Link href="/dashboard">
-              <Button variant="outline" size="lg" className="w-full">
-                Back to Dashboard
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="space-y-3">
+              <Link href="/review">
+                <Button size="lg" className="w-full">
+                  Review & Sync to QuickBooks
+                </Button>
+              </Link>
+              <Link href="/dashboard">
+                <Button variant="outline" size="lg" className="w-full">
+                  Back to Dashboard
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }
