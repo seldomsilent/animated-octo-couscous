@@ -1,4 +1,6 @@
-import { Receipt, Mic, Zap } from "lucide-react";
+import { Receipt, Mic, Zap, Play } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
@@ -16,13 +18,13 @@ export default function Home() {
 
           {/* Tagline */}
           <p className="text-xl text-muted-foreground">
-            AI Bookkeeping Assistant
+            Scan your receipts. Play the game. Books are done.
           </p>
 
           {/* Description */}
           <p className="text-lg text-foreground/80 leading-relaxed">
-            Flip through receipts like flashcards. Speak or type what each one is.
-            Let AI handle the accounting details.
+            Receipts flow in, you blast through them in a flashcard game, and 
+            everything syncs to QuickBooks. Make bookkeeping so fast it&apos;s actually fun.
           </p>
 
           {/* Feature highlights */}
@@ -31,9 +33,9 @@ export default function Home() {
               <div className="p-2 bg-accent rounded-lg mb-3">
                 <Receipt className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Upload</h3>
+              <h3 className="font-semibold text-foreground mb-2">Inbox</h3>
               <p className="text-sm text-muted-foreground text-center">
-                Drop all your receipts at once
+                Email, scan, or upload receipts
               </p>
             </div>
 
@@ -41,9 +43,9 @@ export default function Home() {
               <div className="p-2 bg-accent rounded-lg mb-3">
                 <Mic className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Classify</h3>
+              <h3 className="font-semibold text-foreground mb-2">Play</h3>
               <p className="text-sm text-muted-foreground text-center">
-                Speak or type what each one is
+                Voice or text, slot machine rewards
               </p>
             </div>
 
@@ -53,22 +55,28 @@ export default function Home() {
               </div>
               <h3 className="font-semibold text-foreground mb-2">Sync</h3>
               <p className="text-sm text-muted-foreground text-center">
-                Post to QuickBooks automatically
+                One click to QuickBooks
               </p>
             </div>
           </div>
 
-          {/* CTA Button */}
-          <div className="pt-8">
-            <button className="px-8 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm">
+          {/* CTA Buttons */}
+          <div className="pt-8 flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/dashboard">
+              <Button size="lg" className="gap-2 px-8">
+                <Play className="w-5 h-5" fill="currentColor" />
+                Try Demo
+              </Button>
+            </Link>
+            <Button size="lg" variant="outline" className="px-8">
               Get Started
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Footer */}
         <p className="absolute bottom-8 text-sm text-muted-foreground">
-          Built for small business owners who hate bookkeeping
+          Replace your bookkeeper. Save $4,960/year.
         </p>
       </div>
     </main>
