@@ -4,6 +4,15 @@
 
 ReceiptFlash is currently a **specification-only project**. This repository contains a README, an environment-variable example, ignore rules and a detailed application specification. It does not contain application source, a package manifest, a database or a deployable service. Uploading receipts, talking to an assistant and posting to QuickBooks are proposed features, not available functions.
 
+## Contents
+
+- [1. Understand the project](#1-understand-the-project)
+- [2. Review the proposed receipt workflow](#2-review-the-proposed-receipt-workflow)
+- [3. Prepare an implementation change](#3-prepare-an-implementation-change)
+- [4. Maintain the documents](#4-maintain-the-documents)
+- [Glossary](#glossary)
+- [Maintenance record](#maintenance-record)
+
 ## 1. Understand the project
 
 **Where:** [README](../README.md) and [Complete Application Specification](SPECIFICATION.md).
@@ -61,7 +70,7 @@ An implementation change turns a defined part of the plan into verified behaviou
 ### How to start
 
 1. Select a bounded feature from the development phases and agree its acceptance criteria.
-2. Inspect the repository before choosing a framework or command. At this edition there is no `package.json`, so the README's `npm install` and `npm run dev` instructions cannot run this project.
+2. Inspect the repository before choosing a framework or command. At this edition there is no `package.json`; the README states that no `npm install` or `npm run dev` workflow exists yet, so do not assume either command runs.
 3. When adding a scaffold, document its real prerequisites, installation command, start command, local address and configuration variables. Treat `.env.example` as a template only; do not commit secrets.
 4. Add and verify the feature, recording implemented behaviour separately from future plans. Do not describe an integration as connected until it has been verified.
 5. Update this manual and [Releases](RELEASES.md) in the same commit as the code. Follow [AGENTS.md](../AGENTS.md).
